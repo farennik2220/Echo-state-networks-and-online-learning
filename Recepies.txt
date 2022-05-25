@@ -1,2 +1,396 @@
-2sine
-Lorentz
+%pylab inline
+import numpy as np
+from IPython.display import clear_output
+
+X_2sin = np.genfromtxt("2sin.txt", delimiter=",")
+
+X_2sin = np.array([np.array((x, )) for x in X_2sin])
+
+plt.title("The dataset 2sin")
+plt.plot(X_2sin[1:], "b")
+plt.show()
+
+Xtr_2sin, Xte_2sin = np.split(X_2sin, 2)
+
+def spectral_radius(A):
+    '''
+    compute the spectral radius of matrix A
+    '''
+    w, v = numpy.linalg.eig(A)
+
+    return np.max(np.absolute(w))
+    
+    def esn(Xtr, Xte, k, Nr=None, progress=True):
+    # Number of inputs
+    Ni = 1
+
+    # Number of hidden neurons
+    if Nr is None:
+        Nr = int(Xtr.shape[0] / 3)
+    
+    # Weights of inputs to neurons
+    Wi = np.random.uniform(-1,1,(Nr, Ni))
+    
+    # Weights between neurons in the hidden layer
+    Wr = np.random.uniform(-1, 1, (Nr, Nr))
+
+    # define the hyper-parameter `a`
+    a = 1
+    
+    # set new weights between neurons in hidden layer
+    Wr = a * Wr /  spectral_radius(Wr)
+    
+    X = [np.zeros(Nr)]
+    
+    # Iterate all steps and generate Xt for each
+    for i in range(Xtr.shape[0] - k):
+        # Optionally print progress for larger tasks
+        if progress and i % 50 == 0:
+            clear_output(wait=True)
+            print("{:<8}{:>6.0%}".format("Training", i/Xtr.shape[0]))
+
+        term1 = Wr @ X[-1]
+        term2 = Wi @ Xtr[i]
+        
+        # Define the noise to be added to the network
+        epsilon = np.random.normal(0, 0.1, size=Nr)
+    
+        X.append(np.tanh(term1 + term2 + epsilon))
+    
+    # Remove the initial t-1 zeros entry
+    X = np.array(X[1:])
+    
+    # Lambda is a hyper-parameter representing the learning rate
+    lbda = 0.0001
+    
+    # Calculate the output weights using linear regression
+    Wo = (X.T @ X) + ((lbda**2) * np.identity(Nr))
+    Wo = np.linalg.inv(Wo)
+    Wo = (Wo @ X.T) @ Xtr[k:]
+    Wo = Wo.T
+    
+    # Initiate testing
+    x = np.zeros(Nr)
+    Z = []
+    
+    # Go through testing and predict values
+    for i in range(Xte.shape[0] - k):
+        # Optionally print progress for larger tasks
+        if progress and i % 50 == 0:
+            clear_output(wait=True)
+            print("{:<8}{:>6.0%}".format("Testing", i/Xte.shape[0]))
+
+        term1 = Wr @ x
+        term2 = Wi @ Xte[i]
+        
+        # Define the noise to be added to the network
+        epsilon = np.random.normal(0, 0.1, size=Nr)
+        
+        x = np.tanh(term1 + term2 + epsilon)
+
+        Z.append(Wo@x)
+    
+    if progress:
+        clear_output()
+
+    return np.array(Z)
+
+k = 1
+Z = esn(Xtr_2sin, Xte_2sin, k)
+
+plt.title("Echo state network predictions after trianing")
+plt.axis((-10, Xte_2sin[k:].shape[0] + 10, -3, 3))
+plt.plot(Xte_2sin[k:], "b", label="testing")
+plt.plot(Z[:,0], "r.", label="predictions")
+legend(loc=1)
+plt.show()
+
+figure(figsize=(12,13))
+
+k = 1
+Z = esn(Xtr_2sin, Xte_2sin, k, progress=False)
+
+plt.subplot(221)
+plt.title("ESN model with k=1 step-ahead forecasting")
+plt.axis((-10, Xte_2sin[k:].shape[0] + 10, -3, 3))
+plt.plot(Xte_2sin[k:], "b", label="testing")
+plt.plot(Z[:,0], "r.", label="predictions")
+legend(loc=1)
+
+k = 7
+Z = esn(Xtr_2sin, Xte_2sin, k, progress=False)
+
+plt.subplot(222)
+plt.title("ESN model with k=5 step-ahead forecasting")
+plt.axis((-10, Xte_2sin[k:].shape[0] + 10, -3, 3))
+plt.plot(Xte_2sin[k:], "b", label="testing")
+plt.plot(Z[:,0], "r.", label="predictions")
+legend(loc=1)
+plt.show()
+
+def nrmse(targets, predictions):
+    mse = np.sqrt(((predictions - targets) ** 2).mean())
+    return mse / np.var(targets)
+    
+    E = []
+K = range(1, 20)
+
+print("NRMSE for a range of k values:")
+for k in K:
+    Z = esn(Xtr_2sin, Xte_2sin, k, progress=False)
+    E.append(nrmse(Xte_2sin[k:][5:], Z[5:]))
+    print("k={:<6} e={:<6.5}".format(k, E[-1]))
+
+plt.title("NRMSE for a range of $k$ values:")
+plt.plot(K, E, "r")
+plt.ylabel("NRMSE")
+plt.xlabel("k-step ahead")
+plt.xticks(np.arange(min(K), max(K)+1, 1.0))
+plt.show()
+
+def esn_online(Xtr, Xte, k, Nr=None, progress=True, a=0.95, mu=0.001):
+    # Number of inputs
+    Ni = 1
+
+    # Number of hidden neurons
+    if Nr is None:
+        Nr = int(Xtr.shape[0] / 3)
+    
+    # Weights of inputs to neurons
+    Wi = np.random.uniform(-1,1,(Nr, Ni))
+    
+    
+    # Weights between neurons in the hidden layer
+    Wr = np.random.uniform(-1, 1, (Nr, Nr))
+    
+    # set new weights between neurons in hidden layer
+    Wr = a * Wr /  spectral_radius(Wr)
+
+    x = np.zeros(Nr)
+    Wo = np.zeros((Nr, 1))
+    
+        
+    # itterate all steps and generate Xt for each
+    for i in range(Xtr.shape[0] - k):
+        if progress and i % 50 == 0:
+            clear_output(wait=True)
+            print("{:<8}{:>6.0%}".format("Training", i/Xtr.shape[0]))
+
+        term1 = Wr @ x
+        term2 = Wi @ Xtr[i]
+
+        # Define the noise to be added to the network
+        epsilon = np.random.normal(0, 0.1, size=Nr)
+    
+        x = np.tanh(term1 + term2 + epsilon)
+        
+        # calculate the error
+        e = Xtr[i + k] - x@Wo
+        
+        #  itterativly adjust the output weights based on the error
+        Wo += (mu*x*e).reshape(Nr, 1)
+
+    Wo = Wo.T
+
+    # Initiate testing
+    x = np.zeros(Nr)
+    Z = []
+    
+    # Go through testing and predict
+    for i in range(Xte.shape[0] - k):
+        if progress and i % 50 == 0:
+            clear_output(wait=True)
+            print("{:<8}{:>6.0%}".format("Testing", i/Xte.shape[0]))
+        
+        term1 = Wr @ x
+        term2 = Wi @ Xte[i]
+
+        # Define the noise to be added to the network
+        epsilon = np.random.normal(0, 0.1, size=Nr)
+
+        x = np.tanh(term1 + term2 + epsilon)
+
+        Z.append(Wo@x)
+    
+    if progress:
+        clear_output()
+
+    return np.array(Z)
+    
+    k = 1
+Z = esn_online(Xtr_2sin, Xte_2sin, k, progress=False)
+
+plt.axis((-10, Xte_2sin[k:].shape[0] + 10, -3, 3))
+
+plt.title("Echo state network predictions after trianing")
+plt.plot(Xte_2sin[k:], "b", label="testing")
+plt.plot(Z[:,0], "r", label="predictions")
+legend(loc=1)
+plt.show()
+
+figure(figsize=(12,13))
+
+k = 1
+Z = esn(Xtr_2sin, Xte_2sin, k)
+
+plt.subplot(221)
+plt.title("ESN (offline) with k=1 step-ahead forecasting")
+plt.axis((-10, Xte_2sin[k:].shape[0] + 10, -3, 3))
+plt.plot(Xte_2sin[k:], "b", label="testing")
+plt.plot(Z[:,0], "r", label="predictions")
+legend(loc=1)
+
+k = 1
+Z = esn_online(Xtr_2sin, Xte_2sin, k)
+
+plt.subplot(222)
+plt.title("ESN (online) with k=1 step-ahead forecasting")
+plt.axis((-10, Xte_2sin[k:].shape[0] + 10, -3, 3))
+plt.plot(Xte_2sin[k:], "b", label="testing")
+plt.plot(Z[:,0], "r", label="predictions")
+legend(loc=1)
+plt.show()
+
+figure(figsize=(12,13))
+
+k = 1
+Z = esn_online(Xtr_2sin, Xte_2sin, k)
+
+plt.subplot(221)
+plt.title("ESN model with k=1 step-ahead forecasting")
+plt.axis((-10, Xte_2sin[k:].shape[0] + 10, -3, 3))
+plt.plot(Xte_2sin[k:], "b", label="testing")
+plt.plot(Z[:,0], "r", label="predictions")
+legend(loc=1)
+
+k = 10
+Z = esn_online(Xtr_2sin, Xte_2sin, k)
+
+plt.subplot(222)
+plt.title("ESN model with k=10 step-ahead forecasting")
+plt.axis((-10, Xte_2sin[k:].shape[0] + 10, -3, 3))
+plt.plot(Xte_2sin[k:], "b", label="testing")
+plt.plot(Z[:,0], "r", label="predictions")
+legend(loc=1)
+plt.show()
+
+X_lorenz = np.genfromtxt("./lorenz.txt", delimiter=",")
+
+X_lorenz = np.array([np.array((x, )) for x in X_lorenz])
+
+plt.title("The dataset lorenz")
+plt.plot(X_lorenz[1:], "b")
+plt.show()
+
+Xtr_lorenz, Xte_lorenz = np.split(X_lorenz, 2)
+
+figure(figsize=(12,13))
+
+k = 1
+Z = esn_online(Xtr_2sin, Xte_2sin, k, Nr=300)
+
+plt.subplot(221)
+plt.title("ESN, k=1, 2sin dataset")
+plt.axis((-10, Xte_2sin[k:].shape[0] + 10, -3, 3))
+plt.plot(Xte_2sin[k:], "b", label="testing")
+plt.plot(Z[:,0], "r", label="predictions")
+legend(loc=1)
+
+k = 1
+Z = esn_online(Xtr_lorenz, Xte_lorenz, k, Nr=300)
+
+plt.subplot(222)
+plt.title("ESN, k=1, lorenz dataset")
+plt.axis((-10, Xte_lorenz[k:].shape[0] + 10, -20, 20))
+plt.plot(Xte_lorenz[k:], "b", label="testing")
+plt.plot(Z[:,0], "r", label="predictions")
+legend(loc=1)
+plt.show()
+
+E = []
+N = range(10, 250, 20)
+
+for n in N:
+    Z = esn_online(Xtr_lorenz, Xte_lorenz, k, progress=False, Nr=n)
+    E.append(nrmse(Xte_lorenz[k:], Z))
+    print("Nr={:<6} e={:<6.5}".format(n, E[-1]))
+    
+    plt.title("NRMSE observed for a range of $N_r$ values")
+plt.plot(N, E, "r")
+plt.xlabel("reservoir size")
+plt.ylabel("NRMSE")
+plt.show()
+
+Nr = N[np.argmin(E)]
+print("Best Nr:", Nr)
+
+figure(figsize=(12,13))
+
+k = 1
+Z = esn_online(Xtr_lorenz, Xte_lorenz, k, Nr=Nr)
+
+plt.subplot(221)
+plt.title("ESN model with k=1 step-ahead forecasting")
+plt.axis((-10, Xte_lorenz[k:].shape[0] + 10, -20, 20))
+plt.plot(Xte_lorenz[k:], "b", label="testing")
+plt.plot(Z[:,0], "r", label="predictions")
+legend(loc=1)
+
+k = 100
+Z = esn_online(Xtr_lorenz, Xte_lorenz, k, Nr=Nr)
+
+plt.subplot(222)
+plt.title("ESN model with k=100 step-ahead forecasting")
+plt.axis((-10, Xte_lorenz[k:].shape[0] + 10, -20, 20))
+plt.plot(Xte_lorenz[k:], "b", label="testing")
+plt.plot(Z[:,0], "r", label="predictions")
+legend(loc=1)
+plt.show()
+
+figure(figsize=(12,13))
+
+k = 1
+Z = esn_online(Xtr_lorenz, Xte_lorenz, k, Nr=300)
+
+plt.subplot(221)
+plt.title("ESN model with k=1 step-ahead forecasting")
+plt.axis((-10, Xte_lorenz[k:].shape[0] + 10, -20, 20))
+plt.plot(Xte_lorenz[k:], "b", label="testing")
+plt.plot(Z[:,0], "r", label="predictions")
+legend(loc=1)
+
+k = 45
+Z = esn_online(Xtr_lorenz, Xte_lorenz, k, Nr=300)
+
+plt.subplot(222)
+plt.title("ESN model with k=45 step-ahead forecasting")
+plt.axis((-10, Xte_lorenz[k:].shape[0] + 10, -20, 20))
+plt.plot(Xte_lorenz[k:], "b", label="testing")
+plt.plot(Z[:,0], "r", label="predictions")
+legend(loc=1)
+plt.show()
+
+
+E = []
+K = range(1, 50)
+
+for k in K:
+    Z = esn_online(Xtr_lorenz, Xte_lorenz, k, progress=False, Nr=Nr)
+    E.append(nrmse(Xte_lorenz[k:], Z))
+    print("k={:<6} e={:<6.5}".format(k, E[-1]))
+
+plt.title("Error observed for a range of $k$ values")
+plt.plot(K, E, "r")
+plt.show()
+
+k = K[np.argmin(E)]
+print("Best k:", k)
+
+Z = esn_online(Xtr_lorenz, Xte_lorenz, k, Nr=Nr)
+
+plt.title("ESN model with k=5 step-ahead forecasting")
+plt.axis((-10, Xte_lorenz[k:].shape[0] + 10, -20, 20))
+plt.plot(Xte_lorenz[k:], "b", label="testing")
+plt.plot(Z[:,0], "r", label="predictions")
+legend(loc=1)
+plt.show()
