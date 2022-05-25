@@ -1,0 +1,2 @@
+# Echo-state-networks-and-online-learning
+This project includes two parts. In the first part of the project I implement a standard Echo State Network (ESN) model without using leaky-integrator neurons. I implement training of the read-out weights by means of the standard regularized least square method. I perform some simulations by considering a K step ahead forecasting task (evaluating several values of K, the forecasting on the "2sine" and "lorentz" time series. In order to train ESNs, I create output pairs starting from the time series.
